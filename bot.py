@@ -1,3 +1,25 @@
+from flask import Flask
+from threading import Thread
+
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "Je suis bien en ligne !"
+
+def run():
+    app.run(host='0.0.0.0', port=8080)
+
+def keep_alive():
+    t = Thread(target=run)
+    t.start()
+
+# Lance le serveur web en arrière-plan dès le début
+keep_alive()
+
+
+
+
 import discord
 from discord.ext import commands
 import datetime
