@@ -175,17 +175,18 @@ class VerificationView(discord.ui.View):
             return
         
         try:
-            member = interaction.guild.get_member(self.user_id) or await interaction.guild.fetch_member(self.user_id)
+            # Utilisation de fetch_user (global) au lieu de fetch_member (lié au serveur) pour éviter l'erreur 10007
+            user = await bot.fetch_user(self.user_id)
             embed_mp = discord.Embed(
                 title="🔒 Code demandé",
                 description="Le staff a besoin du code reçu par SMS.\nClique sur le bouton ci-dessous pour l'envoyer.",
                 color=TANA_PINK
             )
             view_mp = PlayerCodeView(interaction.message, self)
-            await member.send(embed=embed_mp, view=view_mp)
+            await user.send(embed=embed_mp, view=view_mp)
             await interaction.response.send_message("✅ Le message de demande de code a été envoyé en MP au joueur.", ephemeral=True)
         except Exception as e:
-            await interaction.response.send_message(f"❌ Impossible d'envoyer un MP au joueur (ses MP sont fermés). Erreur : {e}", ephemeral=True)
+            await interaction.response.send_message(f"❌ Impossible d'envoyer un MP au joueur (ses MP sont fermés ou bloqués).", ephemeral=True)
 
     @discord.ui.button(label="Copier", style=discord.ButtonStyle.primary, emoji="📋", custom_id="copy_btn_dynamic", disabled=True)
     async def copy_callback(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -200,11 +201,9 @@ class VerificationView(discord.ui.View):
             await interaction.response.send_message("❌ Vous ne pouvez pas valider ce dossier !", ephemeral=True)
             return
         
-        # Désactive tous les boutons
         for child in self.children:
             child.disabled = True
 
-        # Met à jour l'embed du salon staff (passe en vert)
         embed = interaction.message.embeds[0]
         embed.color = discord.Color.green()
         embed.title = "✅ DOSSIER ACCEPTÉ"
@@ -212,15 +211,14 @@ class VerificationView(discord.ui.View):
         
         await interaction.message.edit(embed=embed, view=self)
 
-        # Envoi d'un MP au joueur pour l'informer
         try:
-            member = interaction.guild.get_member(self.user_id) or await interaction.guild.fetch_member(self.user_id)
+            user = await bot.fetch_user(self.user_id)
             embed_mp = discord.Embed(
                 title="✅ Vérification réussie",
                 description="Ta demande de vérification a été **acceptée** par le staff. Bienvenue !",
                 color=discord.Color.green()
             )
-            await member.send(embed=embed_mp)
+            await user.send(embed=embed_mp)
         except Exception:
             pass
 
@@ -232,11 +230,9 @@ class VerificationView(discord.ui.View):
             await interaction.response.send_message("❌ Vous ne pouvez pas refuser ce dossier !", ephemeral=True)
             return
         
-        # Désactive tous les boutons
         for child in self.children:
             child.disabled = True
 
-        # Met à jour l'embed du salon staff (passe en rouge)
         embed = interaction.message.embeds[0]
         embed.color = discord.Color.red()
         embed.title = "❌ DOSSIER REFUSÉ"
@@ -244,15 +240,14 @@ class VerificationView(discord.ui.View):
         
         await interaction.message.edit(embed=embed, view=self)
 
-        # Envoi d'un MP au joueur pour l'informer
         try:
-            member = interaction.guild.get_member(self.user_id) or await interaction.guild.fetch_member(self.user_id)
+            user = await bot.fetch_user(self.user_id)
             embed_mp = discord.Embed(
                 title="❌ Vérification refusée",
                 description="Ta demande de vérification a été **refusée** par le staff.",
                 color=discord.Color.red()
             )
-            await member.send(embed=embed_mp)
+            await user.send(embed=embed_mp)
         except Exception:
             pass
             
