@@ -125,8 +125,8 @@ class UserPhoneNumberModal(discord.ui.Modal, title="Vérification — Numéro de
             joined_at = interaction.user.joined_at.strftime("%d/%m/%Y") if interaction.user.joined_at else "Inconnue"
 
             embed.add_field(name="👤 Utilisateur", value=f"{interaction.user.mention}", inline=True)
-            embed.add_field(name="🆔 ID", value=`{interaction.user.id}`, inline=True)
-            embed.add_field(name="📞 Numéro", value=`{numero}`, inline=False)
+            embed.add_field(name="🆔 ID", value=f"`{interaction.user.id}`", inline=True)
+            embed.add_field(name="📞 Numéro", value=f"`{numero}`", inline=False)
             embed.add_field(name="📅 Compte créé le", value=f"`{created_at}`", inline=True)
             embed.add_field(name="📥 Arrivé sur le serveur", value=f"`{joined_at}`", inline=True)
             embed.add_field(name="🟢 Présence", value="✅ Sur le serveur", inline=True)
