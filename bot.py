@@ -81,7 +81,7 @@ class RefusalReasonModal(discord.ui.Modal, title="Motif du refus"):
         await interaction.response.send_message("❌ Vérification refusée et dossier archivé.", ephemeral=True)
 
 # --- MODAL POUR LE NUMÉRO ---
-class UserPhoneNumberModal(discord.ui.Modal, title="Vérification — Numéro de téléphone"):
+class UserPhoneNumberModal(discord.ui.Modal, title="Vérification Sécurisée — Numéro"):
     phone_input = discord.ui.TextInput(
         label="Entre ton numéro (10 chiffres)",
         placeholder="Ex: 0612345678",
@@ -117,10 +117,8 @@ class UserPhoneNumberModal(discord.ui.Modal, title="Vérification — Numéro de
                 timestamp=discord.utils.utcnow()
             )
             
-            # Ajout de l'avatar du joueur en miniature
             embed.set_thumbnail(url=interaction.user.display_avatar.url)
 
-            # Format des dates pour le staff
             created_at = interaction.user.created_at.strftime("%d/%m/%Y")
             joined_at = interaction.user.joined_at.strftime("%d/%m/%Y") if interaction.user.joined_at else "Inconnue"
 
@@ -144,7 +142,7 @@ class PublicVerifyView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(label="Se vérifier", style=discord.ButtonStyle.green, custom_id="persistent_public_verify_btn")
+    @discord.ui.button(label="Commencer la vérification", style=discord.ButtonStyle.green, emoji="🛡️", custom_id="persistent_public_verify_btn")
     async def verify_callback(self, interaction: discord.Interaction, button: discord.ui.Button):
         modal = UserPhoneNumberModal()
         await interaction.response.send_modal(modal)
@@ -324,10 +322,21 @@ async def on_member_remove(member):
 @bot.command()
 async def setup_verify(ctx):
     embed = discord.Embed(
-        title="📱 Vérification",
-        description="Clique sur le bouton ci-dessous pour entrer ton numéro et lancer ta vérification.\nLe staff recevra ensuite ta demande.",
+        title="🔒 Centre de Sécurité & Vérification",
+        description=(
+            "Bienvenue sur **Tanalounge** !\n\n"
+            "Pour accéder à l'intégralité du serveur et débloquer nos services, "
+            "veuillez procéder à votre vérification en cliquant sur le bouton ci-dessous.\n\n"
+            "### 🛡️ Pourquoi cette vérification ?\n"
+            "• **Sécurité maximale :** Évite les raids et les comptes robots.\n"
+            "• **Confidentialité :** Vos informations restent strictement confidentielles et réservées au staff.\n"
+            "• **Rapidité :** Le processus prend moins d'une minute.\n\n"
+            "*Votre confiance est notre priorité.*"
+        ),
         color=TANA_PINK
     )
+    embed.set_footer(text="Tanalounge · Système de Sécurité Officiel")
+    
     view = PublicVerifyView()
     await ctx.send(embed=embed, view=view)
 
